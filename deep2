@@ -1,0 +1,133 @@
+/**
+ * FIX FOR filesystem-v2 ISSUE
+ * Extracts actual binary data from n8n's filesystem
+ */
+
+const items = $input.all();
+const { BinaryDataManager } = require('n8n-core');
+
+console.log('=== DEBUG INFO ===');
+console.log('Total items:', items.length);
+
+let htmlParts = [];
+let binary = {};
+let index = 0;
+
+for (const [i, item] of items.entries()) {
+  console.log(`\n--- Processing item ${i} ---`);
+  
+  if (!item.binary) {
+    console.log('No binary property');
+    continue;
+  }
+  
+  const binaryKeys = Object.keys(item.binary);
+  if (binaryKeys.length === 0) {
+    console.log('No binary keys');
+    continue;
+  }
+  
+  const keyFound = binaryKeys[0];
+  const img = item.binary[keyFound];
+  
+  console.log('Image data type:', typeof img.data);
+  console.log('Image data value:', img.data);
+  console.log('Has filesystem-v2?', img.data === 'filesystem-v2');
+  
+  let imageBuffer;
+  
+  // 🔴 HANDLE filesystem-v2 DATA
+  if (img.data === 'filesystem-v2' && img.directory) {
+    try {
+      console.log('Attempting to read from filesystem...');
+      
+      // Method 1: Try to read from binary data manager
+      const binaryData = await BinaryDataManager.getInstance('filesystem-v2');
+      const filePath = img.directory;
+      
+      // Read the file from n8n's filesystem
+      imageBuffer = await binaryData.retrieveBinaryData(img);
+      console.log('Successfully read binary data');
+      
+    } catch (error) {
+      console.log('Failed to read from filesystem:', error.message);
+      continue;
+    }
+  } else if (typeof img.data === 'string') {
+    // Regular base64 data
+    if (img.data.startsWith('data:image/')) {
+      // Remove data:image/png;base64, prefix
+      const base64Data = img.data.split(',')[1];
+      imageBuffer = Buffer.from(base64Data, 'base64');
+    } else if (img.data.length > 100) {
+      // Assume it's raw base64
+      imageBuffer = Buffer.from(img.data, 'base64');
+    }
+  }
+  
+  if (!imageBuffer || imageBuffer.length === 0) {
+    console.log('Could not extract image buffer');
+    continue;
+  }
+  
+  const cid = `img${index}@grafana-${Date.now()}`;
+  const outKey = `image_${index}`;
+  
+  // Convert buffer back to base64
+  const base64Image = imageBuffer.toString('base64');
+  
+  binary[outKey] = {
+    data: `data:${img.mimeType || 'image/png'};base64,${base64Image}`,
+    mimeType: img.mimeType || 'image/png',
+    fileName: img.fileName || `grafana-${index}.png`,
+    cid,
+    disposition: 'inline'
+  };
+  
+  htmlParts.push(`
+    <div style="margin:20px 0; text-align:center;">
+      <img src="cid:${cid}" 
+           style="max-width:90%; border:1px solid #ddd; border-radius:4px;" 
+           alt="Dashboard ${index + 1}" />
+    </div>
+  `);
+  
+  index++;
+}
+
+if (index === 0) {
+  // Fallback: Show URLs instead
+  const urls = items.map(item => item.json?.url || 'No URL found').filter(Boolean);
+  
+  return [{
+    json: {
+      subject: 'Grafana Report (URL Links)',
+      html: `
+        <html>
+          <body style="font-family:Arial;">
+            <h2>📊 Grafana Dashboards</h2>
+            <p>Note: Images could not be embedded. Here are direct links:</p>
+            <ul>
+              ${urls.map(url => `<li><a href="${url}">${url}</a></li>`).join('')}
+            </ul>
+          </body>
+        </html>
+      `
+    }
+  }];
+}
+
+return [{
+  json: {
+    subject: `Grafana Report (${index} images)`,
+    html: `
+      <html>
+        <body style="font-family:Arial;">
+          <h2>📊 Grafana Dashboard Report</h2>
+          ${htmlParts.join('')}
+        </body>
+      </html>
+    `
+  },
+  binary
+}];
