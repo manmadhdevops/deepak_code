@@ -1,0 +1,67 @@
+/**
+ * Correct n8n solution:
+ * - Works with Merge (Append)
+ * - Preserves binary correctly
+ * - CID inline images (Outlook safe)
+ */
+
+const items = $input.all();
+
+let htmlImages = [];
+let binary = {};
+let index = 0;
+
+for (const item of items) {
+  if (!item.binary) continue;
+
+  // Dynamically detect the binary key (usually "data")
+  const key = Object.keys(item.binary)[0];
+  if (!key) continue;
+
+  const img = item.binary[key];
+
+  // Guard: ensure real base64 exists
+  if (!img.data || img.data.length < 100) {
+    continue; // skip invalid item instead of crashing
+  }
+
+  const cid = `img_${index}@n8n`;
+  const outKey = `image_${index}`;
+
+  binary[outKey] = {
+    data: img.data,                 // BASE64 – do not modify
+    mimeType: img.mimeType || 'image/png',
+    fileName: img.fileName || `image-${index}.png`,
+    cid,                             // REQUIRED
+    disposition: 'inline'            // REQUIRED for Outlook
+  };
+
+  htmlImages.push(`
+    <div style="margin-bottom:16px">
+      <img src="cid:${cid}" style="max-width:100%; border-radius:8px;" />
+    </div>
+  `);
+
+  index++;
+}
+
+if (index === 0) {
+  throw new Error('No valid binary images received from Merge node');
+}
+
+return [
+  {
+    json: {
+      subject: 'Images embedded inline (Outlook compatible)',
+      html: `
+        <html>
+          <body style="font-family:Arial,sans-serif">
+            <h2>Embedded Images</h2>
+            ${htmlImages.join('\n')}
+          </body>
+        </html>
+      `
+    },
+    binary
+  }
+];
