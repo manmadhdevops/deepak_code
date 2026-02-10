@@ -1,0 +1,61 @@
+/**
+ * FINAL FIXED VERSION
+ * - Correctly reads Merge(Append) binary
+ * - Preserves Base64
+ * - CID inline images (Outlook safe)
+ */
+
+const items = $input.all();
+
+let htmlImages = [];
+let binary = {};
+let index = 0;
+
+for (const item of items) {
+  if (!item.binary || !item.binary.data) continue;
+
+  const img = item.binary.data;
+
+  // 🔴 CORRECT BASE64 LOCATION
+  if (!img.data) continue;
+
+  const cid = `img_${index}@n8n`;
+  const outKey = `image_${index}`;
+
+  binary[outKey] = {
+    data: img.data,                 // ✅ BASE64
+    mimeType: img.mimeType || 'image/png',
+    fileName: img.fileName || `image-${index}.png`,
+    cid,
+    disposition: 'inline'
+  };
+
+  htmlImages.push(`
+    <div style="margin-bottom:16px">
+      <img src="cid:${cid}" style="max-width:100%; border-radius:8px;" />
+    </div>
+  `);
+
+  index++;
+}
+
+if (index === 0) {
+  throw new Error('No binary images found from Merge node');
+}
+
+return [
+  {
+    json: {
+      subject: 'Images embedded inline (Outlook compatible)',
+      html: `
+        <html>
+          <body style="font-family:Arial,sans-serif">
+            <h2>Embedded Images</h2>
+            ${htmlImages.join('\n')}
+          </body>
+        </html>
+      `
+    },
+    binary
+  }
+];
