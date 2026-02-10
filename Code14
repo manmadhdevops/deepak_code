@@ -1,0 +1,72 @@
+/**
+ * FINAL CLEAN n8n SOLUTION (NO require, NO fs)
+ * filesystem-v2 safe
+ * Outlook inline images
+ */
+
+const items = $input.all();
+
+let htmlParts = [];
+let binary = {};
+let index = 0;
+
+for (let i = 0; i < items.length; i++) {
+  const item = items[i];
+
+  // 🔴 Skip items without binary
+  if (!item.binary) continue;
+
+  const keys = Object.keys(item.binary);
+  if (keys.length === 0) continue;
+
+  const binKey = keys[0];
+
+  // 🔴 This is the ONLY supported way
+  const buffer = await this.helpers.binary.getBinaryDataBuffer(i, binKey);
+
+  if (!buffer || buffer.length < 100) continue;
+
+  const cid = `img${index}@mail`;
+  const outKey = `image_${index}`;
+
+  binary[outKey] = {
+    data: buffer.toString('base64'),
+    mimeType: item.binary[binKey].mimeType || 'image/png',
+    fileName: item.binary[binKey].fileName || `grafana-${index}.png`,
+    cid,
+    disposition: 'inline',
+  };
+
+  htmlParts.push(`
+    <div style="margin:16px 0">
+      <img src="cid:${cid}" style="max-width:100%; display:block;" />
+    </div>
+  `);
+
+  index++;
+}
+
+if (index === 0) {
+  throw new Error('No image binaries received from HTTP Request nodes');
+}
+
+return [
+  {
+    json: {
+      subject: 'Grafana Dashboard Report',
+      html: `
+        <html>
+          <body style="font-family:Arial,sans-serif">
+            <h2>📊 Grafana Dashboard</h2>
+            ${htmlParts.join('')}
+            <hr />
+            <div style="font-size:12px;color:#666">
+              This email was sent automatically with n8n
+            </div>
+          </body>
+        </html>
+      `,
+    },
+    binary,
+  },
+];
