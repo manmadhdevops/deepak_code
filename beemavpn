@@ -1,1 +1,9 @@
 bhimashankar / i~w0IAkbanaw
+
+
+<h2 style="margin-bottom:10px;">
+  📊 Grafana Dashboard
+  <span style="font-size:14px; font-weight:normal; color:#666;">
+    ({{ $now.format('DD MMM YYYY') }})
+  </span>
+</h2>
