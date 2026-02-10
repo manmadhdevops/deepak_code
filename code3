@@ -1,0 +1,49 @@
+// This code:
+// 1. Reads multiple images from Merge node
+// 2. Creates inline (CID) attachments
+// 3. Builds HTML email body referencing those images
+
+const items = $input.all();
+
+let htmlImages = [];
+let attachments = [];
+
+items.forEach((item, index) => {
+  if (!item.binary || !item.binary.data) return;
+
+  const cid = `image${index}@n8n`;
+  const mimeType = item.binary.data.mimeType || 'image/png';
+
+  attachments.push({
+    binaryPropertyName: 'data',
+    cid,
+    mimeType,
+    data: item.binary.data.data,
+    filename: `image-${index}.${mimeType.split('/')[1]}`
+  });
+
+  htmlImages.push(`
+    <div style="margin-bottom:16px">
+      <img src="cid:${cid}" style="max-width:100%; border-radius:8px;" />
+    </div>
+  `);
+});
+
+const htmlBody = `
+  <html>
+    <body style="font-family:Arial,sans-serif">
+      <h2>Embedded Images</h2>
+      ${htmlImages.join('\n')}
+    </body>
+  </html>
+`;
+
+return [
+  {
+    json: {
+      subject: 'Images embedded inline (Outlook compatible)',
+      html: htmlBody,
+      attachments
+    }
+  }
+];
