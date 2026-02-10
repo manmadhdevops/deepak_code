@@ -1,0 +1,86 @@
+/**
+ * FINAL, DEFENSIVE, CLEAN JS SOLUTION
+ * - Auto-detects binary key
+ * - Works with single or multiple HTTP Request nodes
+ * - Outlook-safe CID inline images
+ */
+
+const items = $input.all();
+
+let htmlParts = [];
+let binary = {};
+let index = 0;
+
+for (const item of items) {
+  if (!item.binary) {
+    console.log('No binary object on item:', item);
+    continue;
+  }
+
+  // 🔴 AUTO-DETECT binary key (CRITICAL FIX)
+  const binaryKeys = Object.keys(item.binary);
+  if (binaryKeys.length === 0) {
+    console.log('Binary object empty:', item.binary);
+    continue;
+  }
+
+  const keyFound = binaryKeys[0];
+  const img = item.binary[keyFound];
+
+  // 🔴 STRICT base64 validation
+  if (
+    !img ||
+    typeof img.data !== 'string' ||
+    img.data.length < 100
+  ) {
+    console.log('Invalid binary payload:', img);
+    continue;
+  }
+
+  const cid = `img${index}@mail`;
+  const outKey = `image_${index}`;
+
+  binary[outKey] = {
+    data: img.data,                       // MUST be base64
+    mimeType: img.mimeType || 'image/png',
+    fileName: img.fileName || `grafana-${index}.png`,
+    cid,
+    disposition: 'inline'
+  };
+
+  htmlParts.push(`
+    <div style="margin:16px 0">
+      <img src="cid:${cid}" style="max-width:100%; display:block;" />
+    </div>
+  `);
+
+  index++;
+}
+
+// 🔴 HARD FAIL only after detection attempt
+if (index === 0) {
+  throw new Error(
+    'No valid images detected. Check Code node console for binary diagnostics.'
+  );
+}
+
+return [
+  {
+    json: {
+      subject: 'Grafana Dashboard Report',
+      html: `
+        <html>
+          <body style="font-family:Arial,sans-serif">
+            <h2>📊 Grafana Dashboard</h2>
+            ${htmlParts.join('')}
+            <hr />
+            <div style="font-size:12px;color:#666">
+              This email was sent automatically with n8n
+            </div>
+          </body>
+        </html>
+      `
+    },
+    binary
+  }
+];
