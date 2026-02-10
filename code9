@@ -1,0 +1,65 @@
+/**
+ * CLEAN n8n SOLUTION
+ * - Multiple images
+ * - Inline CID
+ * - Outlook compatible
+ */
+
+const items = $input.all();
+
+let html = [];
+let binary = {};
+let index = 0;
+
+for (const item of items) {
+  if (!item.binary || !item.binary.data) continue;
+
+  const img = item.binary.data;
+
+  // Validate base64
+  if (typeof img.data !== 'string' || img.data.length < 100) continue;
+
+  const cid = `img${index}@mail`;
+  const key = `image_${index}`;
+
+  binary[key] = {
+    data: img.data,                 // DO NOT TOUCH
+    mimeType: img.mimeType || 'image/png',
+    fileName: `grafana-${index}.png`,
+    cid,
+    disposition: 'inline'
+  };
+
+  html.push(`
+    <div style="margin:16px 0">
+      <img src="cid:${cid}" style="max-width:100%; display:block;" />
+    </div>
+  `);
+
+  index++;
+}
+
+if (index === 0) {
+  throw new Error('No valid images received');
+}
+
+return [
+  {
+    json: {
+      subject: 'Grafana Dashboard Report',
+      html: `
+        <html>
+          <body style="font-family:Arial,sans-serif">
+            <h2>📊 Grafana Dashboard</h2>
+            ${html.join('')}
+            <hr />
+            <div style="font-size:12px;color:#666">
+              This email was sent automatically with n8n
+            </div>
+          </body>
+        </html>
+      `
+    },
+    binary
+  }
+];
