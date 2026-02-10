@@ -1,0 +1,68 @@
+/**
+ * FINAL working version for your exact setup:
+ * HTTP Request (File) → Merge (Append) → Code → Send Email
+ * Outlook-safe inline images (CID)
+ */
+
+const items = $input.all();
+
+let htmlImages = [];
+let binary = {};
+let index = 0;
+
+for (const item of items) {
+  // Must exist
+  if (!item.binary || !item.binary.data) continue;
+
+  const img = item.binary.data;
+
+  // 🔴 THIS is the real Base64 check
+  if (typeof img.data !== 'string' || img.data.length < 100) {
+    continue;
+  }
+
+  const cid = `img${index}@mail`;
+  const key = `image_${index}`;
+
+  binary[key] = {
+    data: img.data,                 // ✅ EXACT Base64
+    mimeType: img.mimeType || 'image/png',
+    fileName: `grafana-${index}.png`,
+    cid,
+    disposition: 'inline'
+  };
+
+  htmlImages.push(`
+    <div style="margin:16px 0">
+      <img src="cid:${cid}" style="max-width:100%; display:block;" />
+    </div>
+  `);
+
+  index++;
+}
+
+// Now this will NOT trigger anymore
+if (index === 0) {
+  throw new Error('No valid images found from HTTP/Merge');
+}
+
+return [
+  {
+    json: {
+      subject: 'Grafana Test Graph',
+      html: `
+        <html>
+          <body style="font-family:Arial,sans-serif">
+            <h2>Grafana Test Graph</h2>
+            ${htmlImages.join('')}
+            <hr />
+            <div style="font-size:12px;color:#666">
+              This email was sent automatically with n8n
+            </div>
+          </body>
+        </html>
+      `
+    },
+    binary
+  }
+];
