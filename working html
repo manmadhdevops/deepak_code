@@ -1,0 +1,31 @@
+// Merge multiple items into ONE item with multiple binary properties
+
+const combinedItem = {
+  json: {
+    emailHtml: `
+      <h2>📊 Grafana Dashboard</h2>
+
+      <p>Panel 9</p>
+      <img src="cid:panel9" style="max-width:100%; margin-bottom:20px;" />
+
+      <p>Panel 18</p>
+      <img src="cid:panel18" style="max-width:100%; margin-bottom:20px;" />
+
+      <hr />
+      <small>This email was sent automatically with n8n</small>
+    `
+  },
+  binary: {}
+};
+
+// Loop through all incoming items and collect binaries
+for (const item of items) {
+  if (item.binary) {
+    for (const key of Object.keys(item.binary)) {
+      combinedItem.binary[key] = item.binary[key];
+      console.log("Added binary:", key);
+    }
+  }
+}
+
+return [combinedItem];
