@@ -1,0 +1,10 @@
+<h2>📊 Grafana Dashboard</h2>
+
+<p>Panel 1</p>
+<img src="cid:data" style="max-width:100%; margin-bottom:20px;" />
+
+<p>Panel 2</p>
+<img src="cid:data" style="max-width:100%; margin-bottom:20px;" />
+
+<hr />
+<small>This email was sent automatically with n8n</small>
