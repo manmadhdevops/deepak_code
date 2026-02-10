@@ -1,0 +1,175 @@
+/**
+ * FIXED: Handles Grafana images from HTTP requests
+ * - Validates binary data properly
+ * - Shows detailed debugging info
+ * - Works with filesystem-v2 data
+ */
+
+const items = $input.all();
+
+console.log('=== STARTING IMAGE PROCESSING ===');
+console.log('Total items received:', items.length);
+
+let htmlParts = [];
+let binary = {};
+let index = 0;
+let diagnostics = [];
+
+for (const [i, item] of items.entries()) {
+  console.log(`\n--- Processing item ${i} ---`);
+  console.log('Item keys:', Object.keys(item));
+  
+  if (!item.binary) {
+    console.log('❌ No binary property');
+    diagnostics.push(`Item ${i}: No binary property`);
+    continue;
+  }
+
+  const binaryKeys = Object.keys(item.binary);
+  console.log('Binary keys found:', binaryKeys);
+  
+  if (binaryKeys.length === 0) {
+    console.log('❌ Empty binary object');
+    diagnostics.push(`Item ${i}: Empty binary object`);
+    continue;
+  }
+
+  const keyFound = binaryKeys[0];
+  console.log('Using binary key:', keyFound);
+  
+  const img = item.binary[keyFound];
+  console.log('Image object:', {
+    hasData: !!img.data,
+    dataType: typeof img.data,
+    dataLength: img.data?.length,
+    mimeType: img.mimeType,
+    fileExtension: img.fileExtension
+  });
+
+  // 🔴 CRITICAL FIX: Handle filesystem-v2 data
+  if (img.data === 'filesystem-v2' && img.directory) {
+    console.log('⚠️ Detected filesystem-v2 format');
+    console.log('Directory:', img.directory);
+    
+    // The actual image might need to be loaded differently
+    // If you're getting this, the HTTP Request config is wrong
+    diagnostics.push(`Item ${i}: filesystem-v2 format - check HTTP Request config`);
+    continue;
+  }
+
+  // Check if data is valid base64
+  const isBase64 = img.data && (
+    img.data.startsWith('data:image/') || 
+    /^[A-Za-z0-9+/=]+$/.test(img.data) ||
+    (img.data.includes('base64') && img.data.length > 100)
+  );
+
+  if (!isBase64) {
+    console.log('❌ Invalid image data format');
+    console.log('Data sample:', img.data?.substring(0, 100));
+    diagnostics.push(`Item ${i}: Invalid image data - not base64`);
+    continue;
+  }
+
+  const cid = `img${index}@grafana-${Date.now()}`;
+  const outKey = `image_${index}`;
+
+  // Ensure proper base64 format
+  let imageData = img.data;
+  if (!imageData.startsWith('data:')) {
+    imageData = `data:${img.mimeType || 'image/png'};base64,${imageData}`;
+  }
+
+  binary[outKey] = {
+    data: imageData,
+    mimeType: img.mimeType || 'image/png',
+    fileName: img.fileName || `grafana-${index}.png`,
+    cid,
+    disposition: 'inline',
+    contentId: cid
+  };
+
+  console.log(`✅ Added image ${index} with CID: ${cid}`);
+
+  htmlParts.push(`
+    <div style="margin:20px 0; padding:10px; background:#f9f9f9; border-radius:8px;">
+      <img src="cid:${cid}" 
+           style="max-width:100%; border:1px solid #ddd; border-radius:4px;" 
+           alt="Grafana Dashboard ${index + 1}" />
+      <div style="margin-top:8px; font-size:12px; color:#666;">
+        ${img.fileName || `Dashboard ${index + 1}`}
+      </div>
+    </div>
+  `);
+
+  index++;
+}
+
+console.log('\n=== PROCESSING SUMMARY ===');
+console.log('Total processed images:', index);
+console.log('Diagnostics:', diagnostics);
+
+if (index === 0) {
+  // Provide detailed help
+  const errorHtml = `
+    <html>
+      <body style="font-family:Arial,sans-serif; padding:20px;">
+        <h2>⚠️ Image Processing Failed</h2>
+        <h3>Diagnostics:</h3>
+        <ul>
+          ${diagnostics.map(d => `<li>${d}</li>`).join('')}
+        </ul>
+        <h3>Common Fixes:</h3>
+        <ol>
+          <li>Check HTTP Request nodes → Set "Response Format" to "File"</li>
+          <li>Ensure URLs point directly to images (not HTML pages)</li>
+          <li>Verify authentication for Grafana</li>
+          <li>Test URLs in browser to confirm they return images</li>
+        </ol>
+        <p><strong>Total items received:</strong> ${items.length}</p>
+      </body>
+    </html>
+  `;
+
+  // Return error email instead of throwing
+  return [{
+    json: {
+      subject: '⚠️ FAILED: Grafana Dashboard Report',
+      html: errorHtml
+    }
+  }];
+}
+
+return [{
+  json: {
+    subject: `📊 Grafana Dashboard Report (${index} images)`,
+    html: `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                      color: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; }
+            .timestamp { font-size: 12px; color: #888; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>📊 Grafana Dashboard Report</h1>
+            <p>Generated: ${new Date().toLocaleString()}</p>
+            <p>Total dashboards: ${index}</p>
+          </div>
+          
+          ${htmlParts.join('')}
+          
+          <div class="timestamp">
+            <hr>
+            <p>Report ID: ${Date.now()}</p>
+            <p>Generated automatically by n8n workflow</p>
+          </div>
+        </body>
+      </html>
+    `
+  },
+  binary
+}];
