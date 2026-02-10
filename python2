@@ -1,0 +1,92 @@
+import base64
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+
+# -----------------------------
+# SMTP CONFIG
+# -----------------------------
+SMTP_HOST = "smtp.office365.com"
+SMTP_PORT = 587
+SMTP_USER = "your_email@company.com"
+SMTP_PASS = "your_password"
+
+FROM_EMAIL = SMTP_USER
+TO_EMAILS = ["user1@company.com"]
+
+# -----------------------------
+# CREATE EMAIL
+# -----------------------------
+msg = MIMEMultipart("related")
+msg["Subject"] = "Grafana Test Graph"
+msg["From"] = FROM_EMAIL
+msg["To"] = ", ".join(TO_EMAILS)
+
+html_parts = []
+
+# -----------------------------
+# READ IMAGES FROM n8n INPUT
+# -----------------------------
+for i, item in enumerate(items):
+    if "binary" not in item or "data" not in item["binary"]:
+        continue
+
+    img = item["binary"]["data"]
+
+    if "data" not in img:
+        continue
+
+    image_bytes = base64.b64decode(img["data"])
+
+    cid = f"image{i}"
+
+    mime_img = MIMEImage(image_bytes)
+    mime_img.add_header("Content-ID", f"<{cid}>")
+    mime_img.add_header(
+        "Content-Disposition",
+        "inline",
+        filename=f"grafana-{i}.png"
+    )
+
+    msg.attach(mime_img)
+
+    html_parts.append(f"""
+        <div style="margin:16px 0">
+          <img src="cid:{cid}" style="max-width:100%; display:block;" />
+        </div>
+    """)
+
+# -----------------------------
+# HTML BODY
+# -----------------------------
+html_body = f"""
+<html>
+  <body style="font-family:Arial,sans-serif">
+    <h2>Grafana Test Graph</h2>
+    {''.join(html_parts)}
+    <hr/>
+    <div style="font-size:12px;color:#666">
+      This email was sent automatically with n8n
+    </div>
+  </body>
+</html>
+"""
+
+msg.attach(MIMEText(html_body, "html"))
+
+# -----------------------------
+# SEND EMAIL
+# -----------------------------
+with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+    server.starttls()
+    server.login(SMTP_USER, SMTP_PASS)
+    server.sendmail(FROM_EMAIL, TO_EMAILS, msg.as_string())
+
+return [
+    {
+        "json": {
+            "status": "Email sent successfully"
+        }
+    }
+]
